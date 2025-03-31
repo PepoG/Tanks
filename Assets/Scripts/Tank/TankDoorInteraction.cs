@@ -1,98 +1,80 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
+using Unity.XR.CoreUtils;
 
 public class TankDoorInteraction : MonoBehaviour
 {
-    [SerializeField] private Transform playerSeatPosition;
-    [SerializeField] private GameObject tankInterior;
-    [SerializeField] private GameObject tankExterior;
-    
-    private bool isPlayerInside = false;
-    
-    // Setup the interactable component
+    [Header("References")]
+    [SerializeField] private Transform teleportTarget;
+    [SerializeField] private GameObject doorMesh;
+    [SerializeField] private AudioClip openSound;
+    [SerializeField] private AudioClip closeSound;
+
+    private AudioSource audioSource;
+    private XROrigin xrOrigin;
+    private UnityEngine.XR.Interaction.Toolkit.Interactables.XRBaseInteractable interactable;
+    private bool isOpen = false;
+
     private void Awake()
     {
-        UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable interactable = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable>();
+        xrOrigin = FindObjectOfType<XROrigin>();
+
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+            audioSource.playOnAwake = false;
+            audioSource.spatialBlend = 1f;
+        }
+
+        interactable = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRBaseInteractable>();
         if (interactable == null)
         {
             interactable = gameObject.AddComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRSimpleInteractable>();
         }
-        
-        // Add activation event
-        interactable.selectEntered.AddListener(args => OnDoorActivated());
+
+        interactable.selectEntered.AddListener(OnDoorInteracted);
     }
-    
-    // Handle door activation (entry/exit)
-    private void OnDoorActivated()
+
+    private void OnDoorInteracted(SelectEnterEventArgs args)
     {
-        if (isPlayerInside)
+        if (!isOpen)
         {
-            ExitTank();
+            OpenDoor();
         }
         else
         {
-            EnterTank();
-        }
-        
-        isPlayerInside = !isPlayerInside;
-    }
-    
-    // Teleport player inside tank
-    private void EnterTank()
-    {
-        if (playerSeatPosition != null)
-        {
-            // Position the VR rig at the seat position
-            RepositionPlayer(playerSeatPosition.position, playerSeatPosition.rotation);
-            
-            // Show interior, hide exterior if needed
-            if (tankInterior != null) tankInterior.SetActive(true);
-            if (tankExterior != null) tankExterior.SetActive(false);
-            
-            Debug.Log("Player entered tank");
-        }
-        else
-        {
-            Debug.LogError("Player seat position not assigned!");
+            CloseDoor();
         }
     }
-    
-    // Teleport player outside tank
-    private void ExitTank()
+
+    private void OpenDoor()
     {
-        // Get exit position (1 meter behind the door)
-        Vector3 exitPosition = transform.position - transform.forward * 1.5f;
-        Quaternion exitRotation = Quaternion.Euler(0, transform.eulerAngles.y + 180, 0);
-        
-        // Position the VR rig outside
-        RepositionPlayer(exitPosition, exitRotation);
-        
-        // Show exterior, hide interior if needed
-        if (tankInterior != null) tankInterior.SetActive(false);
-        if (tankExterior != null) tankExterior.SetActive(true);
-        
-        Debug.Log("Player exited tank");
+        isOpen = true;
+        if (doorMesh != null)
+        {
+            doorMesh.transform.Rotate(0, 90f, 0); // Simple open animation
+        }
+
+        audioSource?.PlayOneShot(openSound);
+
+        if (xrOrigin != null && teleportTarget != null)
+        {
+            xrOrigin.transform.SetPositionAndRotation(
+                teleportTarget.position,
+                teleportTarget.rotation
+            );
+        }
     }
-    
-    // Helper method to move the player/camera rig
-    private void RepositionPlayer(Vector3 position, Quaternion rotation)
+
+    private void CloseDoor()
     {
-        // Find XR Rig or main camera
-        var xrRig = FindObjectOfType<UnityEngine.XR.Interaction.Toolkit.XRRig>();
-        if (xrRig != null)
+        isOpen = false;
+        if (doorMesh != null)
         {
-            xrRig.transform.position = position;
-            xrRig.transform.rotation = rotation;
+            doorMesh.transform.Rotate(0, -90f, 0); // Close animation
         }
-        else
-        {
-            // Fallback to camera
-            var mainCamera = Camera.main;
-            if (mainCamera != null && mainCamera.transform.parent != null)
-            {
-                mainCamera.transform.parent.position = position;
-                mainCamera.transform.parent.rotation = rotation;
-            }
-        }
+
+        audioSource?.PlayOneShot(closeSound);
     }
 }
